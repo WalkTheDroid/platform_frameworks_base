@@ -1741,10 +1741,12 @@ public class LocationManagerService extends ILocationManager.Stub implements Run
 
         long identity = Binder.clearCallingIdentity();
         synchronized (mLock) {
+        	// -AG-
             MockProvider provider = new MockProvider(name, this,
                 requiresNetwork, requiresSatellite,
                 requiresCell, hasMonetaryCost, supportsAltitude,
-                supportsSpeed, supportsBearing, powerRequirement, accuracy);
+                supportsSpeed, supportsBearing, powerRequirement, accuracy,
+                mContext);
             // remove the real provider if we are replacing GPS or network provider
             if (LocationManager.GPS_PROVIDER.equals(name)
                     || LocationManager.NETWORK_PROVIDER.equals(name)) {

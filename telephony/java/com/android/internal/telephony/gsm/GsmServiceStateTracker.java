@@ -381,13 +381,14 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                 // This callback is called when signal strength is polled
                 // all by itself
 
-                if (!(cm.getRadioState().isOn()) || (cm.getRadioState().isCdma())) {
-                    // Polling will continue when radio turns back on and not CDMA
-                    return;
-                }
+            	// -AG-
+//                if (!(cm.getRadioState().isOn()) || (cm.getRadioState().isCdma())) {
+//                    // Polling will continue when radio turns back on and not CDMA
+//                    return;
+//                }
                 ar = (AsyncResult) msg.obj;
                 onSignalStrengthResult(ar);
-                queueNextSignalStrengthPoll();
+//                queueNextSignalStrengthPoll();
 
                 break;
 
@@ -416,7 +417,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
 
                 // Release any temporary cell lock, which could have been
                 // aquired to allow a single-shot location update.
-                disableSingleLocationUpdate();
+                if(false) disableSingleLocationUpdate();
                 break;
 
             case EVENT_POLL_STATE_REGISTRATION:

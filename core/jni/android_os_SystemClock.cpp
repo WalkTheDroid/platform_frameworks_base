@@ -31,20 +31,20 @@
 namespace android {
 
 /*
- * native public static void setCurrentTimeMillis(long millis)
+ * native public static void setCurrentTimeMillis2(long millis)
  *
  * Set the current time.  This only works when running as root.
  */
-static jboolean android_os_SystemClock_setCurrentTimeMillis(JNIEnv* env,
+static jboolean android_os_SystemClock_setCurrentTimeMillis2(JNIEnv* env,
     jobject clazz, jlong millis)
 {
     return (setCurrentTimeMillis(millis) == 0);
 }
 
 /*
- * native public static long uptimeMillis();
+ * native public static long uptimeMillis2();
  */
-static jlong android_os_SystemClock_uptimeMillis(JNIEnv* env,
+static jlong android_os_SystemClock_uptimeMillis2(JNIEnv* env,
         jobject clazz)
 {
     return (jlong)uptimeMillis();
@@ -84,11 +84,11 @@ static jlong android_os_SystemClock_currentThreadTimeMillis(JNIEnv* env,
  */
 static JNINativeMethod gMethods[] = {
     /* name, signature, funcPtr */
-    { "setCurrentTimeMillis",      "(J)Z",
-            (void*) android_os_SystemClock_setCurrentTimeMillis },
-    { "uptimeMillis",      "()J",
-            (void*) android_os_SystemClock_uptimeMillis },
-    { "elapsedRealtime",      "()J",
+    { "setCurrentTimeMillis2",      "(J)Z",
+            (void*) android_os_SystemClock_setCurrentTimeMillis2 },
+    { "uptimeMillis2",      "()J",
+            (void*) android_os_SystemClock_uptimeMillis2 },
+    { "elapsedRealtime2",      "()J",
             (void*) android_os_SystemClock_elapsedRealtime },
     { "currentThreadTimeMillis",      "()J",
             (void*) android_os_SystemClock_currentThreadTimeMillis },

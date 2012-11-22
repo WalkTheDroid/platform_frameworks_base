@@ -16,6 +16,10 @@
 
 package com.android.internal.location;
 
+import java.io.PrintWriter;
+
+import android.content.Context;
+import android.content.Intent;
 import android.location.ILocationManager;
 import android.location.Location;
 import android.location.LocationProvider;
@@ -25,8 +29,6 @@ import android.os.Bundle;
 import android.os.RemoteException;
 import android.util.Log;
 import android.util.PrintWriterPrinter;
-
-import java.io.PrintWriter;
 
 /**
  * A mock location provider used by LocationManagerService to implement test providers.
@@ -55,10 +57,13 @@ public class MockProvider implements LocationProviderInterface {
 
     private static final String TAG = "MockProvider";
 
+    private Context mContext;
+    
     public MockProvider(String name,  ILocationManager locationManager,
         boolean requiresNetwork, boolean requiresSatellite,
         boolean requiresCell, boolean hasMonetaryCost, boolean supportsAltitude,
-        boolean supportsSpeed, boolean supportsBearing, int powerRequirement, int accuracy) {
+        boolean supportsSpeed, boolean supportsBearing, int powerRequirement, int accuracy,
+        Context context) {
         mName = name;
         mLocationManager = locationManager;
         mRequiresNetwork = requiresNetwork;
@@ -71,6 +76,7 @@ public class MockProvider implements LocationProviderInterface {
         mPowerRequirement = powerRequirement;
         mAccuracy = accuracy;
         mLocation = new Location(name);
+        mContext = context;
     }
 
     public String getName() {
@@ -79,10 +85,14 @@ public class MockProvider implements LocationProviderInterface {
 
     public void disable() {
         mEnabled = false;
+        // -AG-
+        mContext.sendBroadcast(new Intent("android.intent.action.sim.mock.disable").putExtra("p", mName));
     }
 
     public void enable() {
         mEnabled = true;
+        // -AG-
+        mContext.sendBroadcast(new Intent("android.intent.action.sim.mock.enable").putExtra("p", mName));
     }
 
     public boolean isEnabled() {
@@ -189,9 +199,13 @@ public class MockProvider implements LocationProviderInterface {
     }
 
     public void addListener(int uid) {
+        // -AG-
+        mContext.sendBroadcast(new Intent("android.intent.action.sim.mock.add").putExtra("p", mName));
     }
 
     public void removeListener(int uid) {
+        // -AG-
+        mContext.sendBroadcast(new Intent("android.intent.action.sim.mock.remove").putExtra("p", mName));
     }
 
     public void dump(PrintWriter pw, String prefix) {

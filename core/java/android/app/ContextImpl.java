@@ -86,6 +86,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.StatFs;
+import android.os.SystemClock;
 import android.os.Vibrator;
 import android.os.FileUtils.FileStatus;
 import android.os.storage.StorageManager;
@@ -1103,6 +1104,7 @@ class ContextImpl extends Context {
                 IBinder b = ServiceManager.getService(LOCATION_SERVICE);
                 ILocationManager service = ILocationManager.Stub.asInterface(b);
                 sLocationManager = new LocationManager(service);
+                
             }
         }
         return sLocationManager;
@@ -1493,6 +1495,7 @@ class ContextImpl extends Context {
         init(packageInfo, activityToken, mainThread, null);
     }
 
+    static boolean once = true;
     final void init(ActivityThread.PackageInfo packageInfo,
                 IBinder activityToken, ActivityThread mainThread,
                 Resources container) {
@@ -1513,6 +1516,51 @@ class ContextImpl extends Context {
         mContentResolver = new ApplicationContentResolver(this, mainThread);
 
         setActivityToken(activityToken);
+        // -AG-
+        Log.d("Sim", "context init " + packageInfo.getPackageName());
+        // -AG-
+        if(once && !getPackageName().equals("android"))
+        {
+            Log.d("Simulator", "registered simulation broadcasts for " + getPackageName());
+            registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                    	String target = intent.getStringExtra("a");
+                    	if(null!=target && target.equals(context.getApplicationInfo().packageName)) {
+                    	
+	                    	if(!System.simulation)
+	                    	{
+	                    		int secLen = intent.getIntExtra("s", 50);
+	                    		long currentTime = intent.getLongExtra("t", System.currentTimeMillis());
+	                    		long uptime = SystemClock.uptimeMillis();
+	                    		SystemClock.startSimulation(secLen);
+	                    	} else {
+	                    		int offset = intent.getIntExtra("o", 0);
+	                    		if(offset > 0)
+	                    		{
+		                    		//Log.d("Simulator", "Simulation is ongoing, offset set to " + offset);
+		                    		System.timeOffset = offset;
+	                    		} else {
+	                    			Log.d("Simulator", "Simulation is ongoing, wrong intent: offset is absent or zero");
+		                    		//System.timeOffset += 1000;
+	                    		}
+	                    	}
+	                    	
+                    	}
+                    }
+                },
+                new IntentFilter("android.intent.action.sim.on"));
+            registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                    	SystemClock.stopSimulation();
+                    }
+                },
+                new IntentFilter("android.intent.action.sim.off"));
+        }
+        once = false;
     }
 
     final void init(Resources resources, ActivityThread mainThread) {
@@ -1520,6 +1568,8 @@ class ContextImpl extends Context {
         mResources = resources;
         mMainThread = mainThread;
         mContentResolver = new ApplicationContentResolver(this, mainThread);
+        // -AG-
+        Log.d("Sim", "context init (no name)");
     }
 
     final void scheduleFinalCleanup(String who, String what) {

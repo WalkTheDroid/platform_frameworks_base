@@ -16,6 +16,7 @@
 
 package android.os;
 
+import android.util.Log;
 
 /**
  * Core timekeeping facilities.
@@ -111,7 +112,11 @@ public final class SystemClock {
         boolean interrupted = false;
         do {
             try {
-                Thread.sleep(duration);
+            	// -AG-
+            	long dur = duration;
+            	if(System.simulation && dur > System.secondLength)
+            		dur = System.secondLength + (dur-1000)/1000*System.secondLength;
+                Thread.sleep(dur);
             }
             catch (InterruptedException e) {
                 interrupted = true;
@@ -133,7 +138,11 @@ public final class SystemClock {
      *
      * @return if the clock was successfully set to the specified time.
      */
-    native public static boolean setCurrentTimeMillis(long millis);
+    native public static boolean setCurrentTimeMillis2(long millis);
+    public static boolean setCurrentTimeMillis(long millis)
+    {
+    	return setCurrentTimeMillis2(millis);
+    }
 
     /**
      * Returns milliseconds since boot, not counting time spent in deep sleep.
@@ -142,14 +151,83 @@ public final class SystemClock {
      *
      * @return milliseconds of non-sleep uptime since boot.
      */
-    native public static long uptimeMillis();
+    native public static long uptimeMillis2();
+    public static long uptimeMillis()
+    {
+		if (System.simulation)
+			return System.uptimeBase + System.timeOffset;
+		else
+			return System.timeOffset0 + uptimeMillis2();
+    }
+
+    private static Thread simulatorThread;
+    //private static int baseOffset;
+    
+    public static void startSimulation(int secLength)
+    {
+		if (!System.simulation) {
+			System.uptimeBase = uptimeMillis2();
+			System.currentTimeBase = System.currentTimeMillis2();
+			
+			System.timeOffset = System.timeOffset0;
+			
+			System.secondLength = secLength;
+			System.simulation = true;
+			
+			simulatorThread = new Thread(new Runnable() {
+				
+				public void run() {
+					try {
+						while(!Thread.interrupted()) {
+							long ts = uptimeMillis2();
+							System.timeOffset = System.timeOffset0 + (int)((ts - System.uptimeBase)*1000 / System.secondLength);
+							long mod = (ts - System.uptimeBase) % System.secondLength;
+							long duration = System.secondLength - mod;
+							Thread.sleep(duration);
+						}
+					} catch (InterruptedException e) {
+						
+					}
+				}
+			});
+			
+			simulatorThread.start();
+			
+			Log.d("Simulator", "Simulation is starting at currentTime = " + System.currentTimeBase + 
+					", secondLength = " + secLength);
+		}
+    }
+    
+    public static void stopSimulation()
+    {
+		if (System.simulation) {
+			simulatorThread.interrupt();
+			try {
+				simulatorThread.join();
+			} catch (InterruptedException e) {
+			}
+			
+			System.timeOffset0 = (int)(System.timeOffset - (uptimeMillis2() - System.uptimeBase));
+			System.simulation = false;
+			
+			simulatorThread = null;
+			Log.d("Simulator", "Simulating normal timeflow shifted by offset " + System.timeOffset);
+		}
+    }
 
     /**
      * Returns milliseconds since boot, including time spent in sleep.
      *
      * @return elapsed milliseconds since boot.
      */
-    native public static long elapsedRealtime();
+    native public static long elapsedRealtime2();
+    public static long elapsedRealtime()
+    {
+		if (System.simulation)
+			return System.uptimeBase + System.timeOffset;
+		else
+			return System.uptimeBase + elapsedRealtime2();
+    }
     
     /**
      * Returns milliseconds running in the current thread.

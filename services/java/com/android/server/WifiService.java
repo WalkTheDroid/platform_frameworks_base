@@ -16,20 +16,31 @@
 
 package com.android.server;
 
+import static android.net.wifi.WifiManager.WIFI_AP_STATE_DISABLED;
+import static android.net.wifi.WifiManager.WIFI_AP_STATE_DISABLING;
+import static android.net.wifi.WifiManager.WIFI_AP_STATE_ENABLED;
+import static android.net.wifi.WifiManager.WIFI_AP_STATE_ENABLING;
+import static android.net.wifi.WifiManager.WIFI_AP_STATE_FAILED;
 import static android.net.wifi.WifiManager.WIFI_STATE_DISABLED;
 import static android.net.wifi.WifiManager.WIFI_STATE_DISABLING;
 import static android.net.wifi.WifiManager.WIFI_STATE_ENABLED;
 import static android.net.wifi.WifiManager.WIFI_STATE_ENABLING;
 import static android.net.wifi.WifiManager.WIFI_STATE_UNKNOWN;
 
-import static android.net.wifi.WifiManager.WIFI_AP_STATE_DISABLED;
-import static android.net.wifi.WifiManager.WIFI_AP_STATE_DISABLING;
-import static android.net.wifi.WifiManager.WIFI_AP_STATE_ENABLED;
-import static android.net.wifi.WifiManager.WIFI_AP_STATE_ENABLING;
-import static android.net.wifi.WifiManager.WIFI_AP_STATE_FAILED;
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.app.backup.IBackupManager;
 import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
@@ -38,20 +49,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.net.wifi.IWifiManager;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
-import android.net.wifi.WifiNative;
-import android.net.wifi.WifiStateTracker;
-import android.net.wifi.ScanResult;
-import android.net.wifi.WifiConfiguration;
-import android.net.wifi.SupplicantState;
-import android.net.wifi.WifiConfiguration.KeyMgmt;
 import android.net.ConnectivityManager;
+import android.net.DhcpInfo;
 import android.net.InterfaceConfiguration;
 import android.net.NetworkStateTracker;
-import android.net.DhcpInfo;
 import android.net.NetworkUtils;
+import android.net.wifi.IWifiManager;
+import android.net.wifi.ScanResult;
+import android.net.wifi.SupplicantState;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.net.wifi.WifiStateTracker;
+import android.net.wifi.WifiConfiguration.KeyMgmt;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -64,25 +74,13 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.provider.Settings;
-import android.util.Slog;
 import android.text.TextUtils;
+import android.util.Log;
+import android.util.Slog;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
-import java.io.FileDescriptor;
-import java.io.PrintWriter;
-import java.net.UnknownHostException;
-
-import com.android.internal.app.IBatteryStats;
-import android.app.backup.IBackupManager;
-import com.android.server.am.BatteryStatsService;
 import com.android.internal.R;
+import com.android.internal.app.IBatteryStats;
+import com.android.server.am.BatteryStatsService;
 
 /**
  * WifiService handles remote WiFi operation requests by implementing
@@ -205,6 +203,9 @@ public class WifiService extends IWifiManager.Stub {
     private static final String ACTION_DEVICE_IDLE =
             "com.android.server.WifiManager.action.DEVICE_IDLE";
 
+    // -AG-
+    private List<ScanResult> mLastStoredScanResults = null; 
+    
     WifiService(Context context, WifiStateTracker tracker) {
         mContext = context;
         mWifiStateTracker = tracker;
@@ -244,16 +245,27 @@ public class WifiService extends IWifiManager.Stub {
                 new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
+                    	// -AG-
+    	            	try {
+    	            		mLastStoredScanResults = intent.getExtras().getParcelableArrayList("r");
+    	            		mWifiStateTracker.notifyScanResultsAvailableTest();
+    	            	} catch (Exception e) {
+    	            		Log.e("Simulator", "Error in WifiService: " + e.toString());
+    	            	}
+    	            	//mWifiStateTracker.sendEmptyMessage(5); // EVENT_SCAN_RESULTS_AVAILABLE
+    	                //updateWifiState();
+                    	
+    	                /*
                         // clear our flag indicating the user has overwridden airplane mode
                         mAirplaneModeOverwridden = false;
                         // on airplane disable, restore Wifi if the saved state indicates so
                         if (!isAirplaneModeOn() && testAndClearWifiSavedState()) {
                             persistWifiEnabled(true);
                         }
-                        updateWifiState();
+                        updateWifiState();*/
                     }
                 },
-                new IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED));
+                new IntentFilter("android.intent.action.sim.scan_res"));
 
         mContext.registerReceiver(
             new BroadcastReceiver() {
@@ -268,6 +280,18 @@ public class WifiService extends IWifiManager.Stub {
 
                 }
             },new IntentFilter(ConnectivityManager.ACTION_TETHER_STATE_CHANGED));
+        
+        // -AG-
+        mContext.registerReceiver(
+	        new BroadcastReceiver() {
+	            @Override
+	            public void onReceive(Context context, Intent intent) {
+	            	setWifiEnabled(true);
+	            	mWifiStateTracker.notifyScanResultsAvailableTest();
+	                updateWifiState();
+	            }
+	        },
+	        new IntentFilter("alex.intent.start_wifi"));
     }
 
     /**
@@ -380,6 +404,9 @@ public class WifiService extends IWifiManager.Stub {
     public boolean startScan(boolean forceActive) {
         enforceChangePermission();
 
+        if(mWifiStateTracker.getWifiState()!=WIFI_AP_STATE_ENABLED)
+        	return false;
+        
         switch (mWifiStateTracker.getSupplicantState()) {
             case DISCONNECTED:
             case INACTIVE:
@@ -391,7 +418,13 @@ public class WifiService extends IWifiManager.Stub {
                         WifiStateTracker.SUPPL_SCAN_HANDLING_LIST_ONLY);
                 break;
         }
-        return mWifiStateTracker.scan(forceActive);
+        
+        // -AG-
+        Intent i = new Intent("android.intent.action.sim.scan_req");
+        i.putExtra("active", forceActive);
+        mContext.sendBroadcast(i);
+        
+        return true;
     }
 
     /**
@@ -412,9 +445,15 @@ public class WifiService extends IWifiManager.Stub {
 
             mLastEnableUid = Binder.getCallingUid();
             // set a flag if the user is enabling Wifi while in airplane mode
-            mAirplaneModeOverwridden = (enable && isAirplaneModeOn() && isAirplaneToggleable());
+            //mAirplaneModeOverwridden = (enable && isAirplaneModeOn() && isAirplaneToggleable());
             sendEnableMessage(enable, true, Binder.getCallingUid());
         }
+
+        
+        //mContext.sendBroadcast(new Intent(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        
+        /*Toast toast = Toast.makeText(mContext, "setWifiEnabled(" + enable + ")", Toast.LENGTH_SHORT);
+        toast.show();*/
 
         return true;
     }
@@ -1363,44 +1402,48 @@ public class WifiService extends IWifiManager.Stub {
      */
     public List<ScanResult> getScanResults() {
         enforceAccessPermission();
-        String reply;
+//        String reply;
+//
+//        reply = mWifiStateTracker.scanResults();
+//        if (reply == null) {
+//            return null;
+//        }
 
-        reply = mWifiStateTracker.scanResults();
-        if (reply == null) {
-            return null;
-        }
+       if(null==mLastStoredScanResults) {
+    	   return Collections.emptyList();
+       } else {
+    	   return new ArrayList<ScanResult>(mLastStoredScanResults);
+       }
 
-        List<ScanResult> scanList = new ArrayList<ScanResult>();
-
-        int lineCount = 0;
-
-        int replyLen = reply.length();
-        // Parse the result string, keeping in mind that the last line does
-        // not end with a newline.
-        for (int lineBeg = 0, lineEnd = 0; lineEnd <= replyLen; ++lineEnd) {
-            if (lineEnd == replyLen || reply.charAt(lineEnd) == '\n') {
-                ++lineCount;
-                /*
-                 * Skip the first line, which is a header
-                 */
-                if (lineCount == 1) {
-                    lineBeg = lineEnd + 1;
-                    continue;
-                }
-                if (lineEnd > lineBeg) {
-                    String line = reply.substring(lineBeg, lineEnd);
-                    ScanResult scanResult = parseScanResult(line);
-                    if (scanResult != null) {
-                        scanList.add(scanResult);
-                    } else if (DBG) {
-                        Slog.w(TAG, "misformatted scan result for: " + line);
-                    }
-                }
-                lineBeg = lineEnd + 1;
-            }
-        }
-        mWifiStateTracker.setScanResultsList(scanList);
-        return scanList;
+//        int lineCount = 0;
+//
+//        int replyLen = reply.length();
+//        // Parse the result string, keeping in mind that the last line does
+//        // not end with a newline.
+//        for (int lineBeg = 0, lineEnd = 0; lineEnd <= replyLen; ++lineEnd) {
+//            if (lineEnd == replyLen || reply.charAt(lineEnd) == '\n') {
+//                ++lineCount;
+//                /*
+//                 * Skip the first line, which is a header
+//                 */
+//                if (lineCount == 1) {
+//                    lineBeg = lineEnd + 1;
+//                    continue;
+//                }
+//                if (lineEnd > lineBeg) {
+//                    String line = reply.substring(lineBeg, lineEnd);
+//                    ScanResult scanResult = parseScanResult(line);
+//                    if (scanResult != null) {
+//                        scanList.add(scanResult);
+//                    } else if (DBG) {
+//                        Slog.w(TAG, "misformatted scan result for: " + line);
+//                    }
+//                }
+//                lineBeg = lineEnd + 1;
+//            }
+//        }
+//        mWifiStateTracker.setScanResultsList(scanList);
+//        return scanList;
     }
 
     /**
@@ -1894,10 +1937,14 @@ public class WifiService extends IWifiManager.Stub {
             switch (msg.what) {
 
                 case MESSAGE_ENABLE_WIFI:
-                    setWifiEnabledBlocking(true, msg.arg1 == 1, msg.arg2);
-                    if (mWifiWatchdogService == null) {
-                        mWifiWatchdogService = new WifiWatchdogService(mContext, mWifiStateTracker);
-                    }
+                    // -AG-
+                    //final int eventualWifiState = msg.arg1 == 1 ? WIFI_STATE_ENABLED : WIFI_STATE_DISABLED;
+                    setWifiEnabledState(WIFI_STATE_ENABLED, 0);
+
+//                    setWifiEnabledBlocking(true, msg.arg1 == 1, msg.arg2);
+//                    if (mWifiWatchdogService == null) {
+//                        mWifiWatchdogService = new WifiWatchdogService(mContext, mWifiStateTracker);
+//                    }
                     sWakeLock.release();
                     break;
 
@@ -1914,8 +1961,9 @@ public class WifiService extends IWifiManager.Stub {
                 case MESSAGE_DISABLE_WIFI:
                     // a non-zero msg.arg1 value means the "enabled" setting
                     // should be persisted
-                    setWifiEnabledBlocking(false, msg.arg1 == 1, msg.arg2);
-                    mWifiWatchdogService = null;
+                    setWifiEnabledState(WIFI_STATE_DISABLED, 0);
+                    //setWifiEnabledBlocking(false, msg.arg1 == 1, msg.arg2);
+                    //mWifiWatchdogService = null;
                     sWakeLock.release();
                     break;
 

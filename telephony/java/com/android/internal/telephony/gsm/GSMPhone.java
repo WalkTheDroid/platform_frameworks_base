@@ -16,8 +16,11 @@
 
 package com.android.internal.telephony.gsm;
 
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.database.SQLException;
 import android.net.Uri;
@@ -66,6 +69,7 @@ import com.android.internal.telephony.PhoneBase;
 import com.android.internal.telephony.PhoneNotifier;
 import com.android.internal.telephony.PhoneProxy;
 import com.android.internal.telephony.PhoneSubInfo;
+import com.android.internal.telephony.ServiceStateTracker;
 import com.android.internal.telephony.TelephonyProperties;
 import com.android.internal.telephony.gsm.stk.StkService;
 import com.android.internal.telephony.test.SimulatedRadioControl;
@@ -163,6 +167,48 @@ public class GSMPhone extends PhoneBase {
         mCM.setOnUSSD(this, EVENT_USSD, null);
         mCM.setOnSuppServiceNotification(this, EVENT_SSN, null);
         mSST.registerForNetworkAttach(this, EVENT_REGISTERED_TO_NETWORK, null);
+
+    	// -AG-
+        mContext.registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                    	String operatorNumeric = intent.getStringExtra("op");
+                    	// operatorNumeric := CCCNN, CCC := MCC, NN := MNC 
+                    	setSystemProperty(TelephonyProperties.PROPERTY_OPERATOR_NUMERIC, operatorNumeric);
+    	                return;
+                    }
+                },
+                new IntentFilter("android.intent.action.sim.gsm_op"));
+
+        mContext.registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                    	String lac = intent.getStringExtra("lac");
+                    	String cid = intent.getStringExtra("cid");
+                    	String states[] = {"", lac, cid};
+                    	AsyncResult ar = new AsyncResult(null, states, null);
+                    	mSST.sendMessage(obtainMessage(15, ar)); // EVENT_GET_LOC_DONE
+    	                return;
+                    }
+                },
+                new IntentFilter("android.intent.action.sim.gsm_loc"));
+        
+        mContext.registerReceiver(
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                    	int rssi = intent.getIntExtra("rssi", -1);
+                    	int ss[] = {rssi};
+                    	AsyncResult ar = new AsyncResult(null, ss, null);
+                    	mSST.sendMessage(obtainMessage(3, ar)); // EVENT_GET_SIGNAL_STRENGTH
+    	                return;
+                    }
+                },
+                new IntentFilter("android.intent.action.sim.gsm_ss"));
+        
+        Log.d("Simulator", "registered receivers for GSM operator, cell location and signal strength");
 
         if (false) {
             try {

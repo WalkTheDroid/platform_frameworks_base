@@ -560,11 +560,17 @@ public class WifiStateTracker extends NetworkStateTracker {
      * Send the tracker a notification that a scan has completed, and results
      * are available.
      */
-    void notifyScanResultsAvailable() {
+   void notifyScanResultsAvailable() {
         // reset the supplicant's handling of scan results to "normal" mode
         setScanResultHandling(SUPPL_SCAN_HANDLING_NORMAL);
         sendEmptyMessage(EVENT_SCAN_RESULTS_AVAILABLE);
     }
+
+   //-AG-
+   public void notifyScanResultsAvailableTest() {
+	   //notifyScanResultsAvailable();
+	   sendEmptyMessage(EVENT_SCAN_RESULTS_AVAILABLE);
+   }
 
     /**
      * Send the tracker a notification that we can no longer communicate with
@@ -1638,7 +1644,9 @@ public class WifiStateTracker extends NetworkStateTracker {
         if (mWifiState.get() != WIFI_STATE_ENABLED && !isDriverStopped()) {
             return null;
         }
-        return WifiNative.scanResultsCommand();
+        // -AG-
+        return "00:bb:cc:dd:cc:ee       2427    166     [WPA-EAP-TKIP][WPA2-EAP-CCMP]   Net1\n"; 
+        //WifiNative.scanResultsCommand();
     }
 
     /**
